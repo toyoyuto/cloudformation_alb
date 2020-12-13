@@ -140,25 +140,55 @@ Resources:
           Value: !Sub "${PJPrefix}-private-route"
 
 # ------------------------------------------------------------#
+#  NAT Gateway
+# ------------------------------------------------------------#
+  NATGateway: 
+    Type: "AWS::EC2::NatGateway"
+    Properties: 
+      AllocationId: !GetAtt NATGatewayAEIP.AllocationId 
+      SubnetId: !Ref PublicSubnet
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-natgw"
+  # NATGateway For EIP Create
+  NATGatewayAEIP: 
+    Type: "AWS::EC2::EIP"
+    Properties: 
+      Domain: vpc
+
+# ------------------------------------------------------------#
 # Routing
 # ------------------------------------------------------------# 
-# PublicRouteA Create
+# PublicRoute Create
   PublicRoute: 
     Type: "AWS::EC2::Route"
     Properties: 
       RouteTableId: !Ref PublicRouteTable 
       DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway 
+# PrivateRoute Create
+  PrivateRoute: 
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTable 
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGateway 
 
 # ------------------------------------------------------------#
 # RouteTable Associate
 # ------------------------------------------------------------# 
-# PublicRouteTable Associate SubnetA
+# PublicRouteTable Associate PublicSubnet
   PublicSubnetRouteTableAssociation: 
     Type: "AWS::EC2::SubnetRouteTableAssociation"
     Properties: 
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
+# PrivateRouteTable Associate PrivateSubnet
+  PrivateSubnetRouteTableAssociation: 
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties: 
+        SubnetId: !Ref PrivateSubnet
+        RouteTableId: !Ref PrivateRouteTable
 
 # ------------------------------------------------------------#
 # EC2
@@ -268,6 +298,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${PJPrefix}-db-server-sg"
+
 # ------------------------------------------------------------#
 # Output Parameters
 # ------------------------------------------------------------#                
