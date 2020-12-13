@@ -16,7 +16,8 @@ Metadata:
           - PublicSubnetCIDR
           - PrivateSubnetCIDR
           - KeyName
-          - PrivateIpEc2
+          - PublicIP
+          - PrivateIP
 
     ParameterLabels: 
       VPCCIDR: 
@@ -25,6 +26,10 @@ Metadata:
         default: "PublicSubnet CIDR"
       PrivateSubnetCIDR: 
         default: "PrivateSubnet CIDR"
+      PublicIP: 
+        default: "Public IP"
+      PrivateIP: 
+        default: "Private IP"
 
 
 # ------------------------------------------------------------#
@@ -49,9 +54,13 @@ Parameters:
   KeyName:
     Type: "AWS::EC2::KeyPair::KeyName"
 
-  PrivateIpEc2:
+  PublicIP:
     Type: String
     Default: "10.0.1.10"
+
+  PrivateIP:
+    Type: String
+    Default: "10.0.2.10"
 
 Resources: 
 # ------------------------------------------------------------#
@@ -154,6 +163,7 @@ Resources:
 # ------------------------------------------------------------#
 # EC2
 # ------------------------------------------------------------# 
+  # WebServerインスタンス
   WebServer: 
     Type: AWS::EC2::Instance
     Properties: 
@@ -164,7 +174,7 @@ Resources:
         - AssociatePublicIpAddress: "true"
           DeviceIndex: "0"
           SubnetId: !Ref PublicSubnet
-          PrivateIpAddress: !Ref PrivateIpEc2
+          PrivateIpAddress: !Ref PublicIP
           GroupSet:
             - !Ref WebServerSG
 
@@ -179,12 +189,12 @@ Resources:
           - Key: Name
             Value: !Sub "${PJPrefix}-web-server"
 
-  # EC2のセキュリティグループ
+  # WebServerセキュリティグループ
   WebServerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: ec2-sg-cf
-      GroupDescription: Allow SSH and HTTP access only MyIP
+      GroupName: web-sg-cf
+      GroupDescription: web server sg
       VpcId: !Ref VPC
       SecurityGroupIngress:
         # ssh
@@ -196,10 +206,68 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort : 8
+          ToPort : -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort : 8
+          ToPort : -1
+          CidrIpv6: ::/0
       Tags:
         - Key: Name
           Value: !Sub "${PJPrefix}-web-server-sg"
 
+  # DBServerインスタンス
+  DbServer: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-00f045aed21a55240
+      KeyName: !Ref KeyName
+      InstanceType: t2.micro
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          SubnetId: !Ref PrivateSubnet
+          PrivateIpAddress: !Ref PrivateIP
+          GroupSet:
+            - !Ref DbServerSG
+      Tags:
+          - Key: Name
+            Value: !Sub "${PJPrefix}-db-server"
+
+  # DBServerセキュリティグループ
+  DbServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: db-sg-cf
+      GroupDescription: db server sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # ssh
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIpv6: ::/0
+        - IpProtocol: icmp
+          FromPort : 8
+          ToPort : -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort : 8
+          ToPort : -1
+          CidrIpv6: ::/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${PJPrefix}-db-server-sg"
 # ------------------------------------------------------------#
 # Output Parameters
 # ------------------------------------------------------------#                
@@ -252,5 +320,7 @@ Outputs:
     Value: !Ref WebServer
     Export:
       Name: !Sub "${PJPrefix}-web-server"
-
-
+  DbServer:
+    Value: !Ref DbServer
+    Export:
+      Name: !Sub "${PJPrefix}-db-server"
