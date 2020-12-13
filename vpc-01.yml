@@ -171,6 +171,9 @@ Resources:
       UserData: !Base64 |
         #!/bin/bash
         sudo yum update
+        sudo yum -y install httpd
+        sudo systemctl start httpd.service
+        sudo systemctl enable httpd.service
 
       Tags:
           - Key: Name
@@ -188,6 +191,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
