@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: 
-  Amazon Web Services 基礎からのネットワーク&サーバー構築
+  Amazon Web Services Network & server construction from the basics
 
 Metadata: 
   "AWS::CloudFormation::Interface": 
@@ -210,10 +210,23 @@ Resources:
 
       UserData: !Base64 |
         #!/bin/bash
-        sudo yum update
+        sudo yum -y update
         sudo yum -y install httpd
         sudo systemctl start httpd.service
         sudo systemctl enable httpd.service
+        
+        sudo amazon-linux-extras install php7.3
+        sudo yum -y install php php-mbstring
+        sudo yum -y install mariadb-server
+        
+        cd ~
+        wget https://ja.wordpress.org/latest-ja.tar.gz
+        tar xzvf latest-ja.tar.gz 
+        cd wordpress
+        sudo cp -r * /var/www/html
+        sudo chown apache:apache /var/www/html -R
+
+        sudo systemctl restart httpd.service
 
       Tags:
           - Key: Name
@@ -262,6 +275,14 @@ Resources:
           PrivateIpAddress: !Ref PrivateIP
           GroupSet:
             - !Ref DbServerSG
+
+      UserData: !Base64 |
+        #!/bin/bash
+        sudo yum -y update
+        sudo yum -y install mariadb-server
+        sudo systemctl start mariadb
+        sudo systemctl enable mariadb
+
       Tags:
           - Key: Name
             Value: !Sub "${PJPrefix}-db-server"
