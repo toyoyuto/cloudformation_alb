@@ -1,24 +1,30 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: 
+AWSTemplateFormatVersion: 
+  "2010-09-09"
+Description:
   Amazon Web Services Network & server construction from the basics
-
-Metadata: 
-  "AWS::CloudFormation::Interface": 
+  
+Metadata:
+  # コンソールでパラメータをグループ化およびソートする方法を定義するメタデータキー
+  "AWS::CloudFormation::Interface":
+    # パラメーターグループとそのグループに含めるパラメーターの定義
     ParameterGroups: 
+      # Project名に関するグループ
       - Label: 
           default: "Project Name Prefix"
         Parameters: 
           - PJPrefix
+      # ネットワーク設定に関するグループ
       - Label: 
           default: "Network Configuration"
+        # 記述された順番に表示される
         Parameters: 
           - VPCCIDR
           - PublicSubnetCIDR
           - PrivateSubnetCIDR
-          - KeyName
           - PublicIP
           - PrivateIP
-
+          - KeyName
+    # パラメーターのラベル
     ParameterLabels: 
       VPCCIDR: 
         default: "VPC CIDR"
@@ -51,9 +57,6 @@ Parameters:
     Type: String
     Default: "10.0.2.0/24"
 
-  KeyName:
-    Type: "AWS::EC2::KeyPair::KeyName"
-
   PublicIP:
     Type: String
     Default: "10.0.1.10"
@@ -62,6 +65,9 @@ Parameters:
     Type: String
     Default: "10.0.2.10"
 
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+  
 Resources: 
 # ------------------------------------------------------------#
 #  VPC
@@ -69,10 +75,13 @@ Resources:
 # VPC Create
   VPC: 
     Type: "AWS::EC2::VPC"
-    Properties: 
+    Properties:
       CidrBlock: !Ref VPCCIDR
+      # VPC に対して DNS 解決がサポートされているか
       EnableDnsSupport: "true"
+      # VPC 内に起動されるインスタンスが DNS ホスト名を取得するか
       EnableDnsHostnames: "true"
+      # VPC 内に起動されるインスタンスの許可されているテナンシー
       InstanceTenancy: default
       Tags: 
         - Key: Name
@@ -144,16 +153,22 @@ Resources:
 # ------------------------------------------------------------#
   NATGateway: 
     Type: "AWS::EC2::NatGateway"
-    Properties: 
+    Properties:
+      # NAT ゲートウェイに関連付ける Elastic IPアドレスの割り当て ID
+      # 下記で構築する Elastic IPのIDを指定
       AllocationId: !GetAtt NATGatewayAEIP.AllocationId 
       SubnetId: !Ref PublicSubnet
       Tags: 
         - Key: Name
           Value: !Sub "${PJPrefix}-natgw"
-  # NATGateway For EIP Create
+  # NATGateway For Elastic IP Create
   NATGatewayAEIP: 
     Type: "AWS::EC2::EIP"
-    Properties: 
+    Properties:
+      # ------------------------------------------------------
+      # Elastic IP アドレスが VPC のインスタンスで使用するか、
+      # EC2-Classic のインスタンスで使用するか
+      # ------------------------------------------------------
       Domain: vpc
 
 # ------------------------------------------------------------#
@@ -201,13 +216,19 @@ Resources:
       KeyName: !Ref KeyName
       InstanceType: t2.micro
       NetworkInterfaces: 
+        # IPv4 アドレスを割り当てるか
         - AssociatePublicIpAddress: "true"
+          # ------------------------------------------------------
+          # アタッチの順序におけるネットワークインターフェイスの位置。
+          # ネットワークインターフェイスを指定する場合必須
+          # ------------------------------------------------------
           DeviceIndex: "0"
           SubnetId: !Ref PublicSubnet
           PrivateIpAddress: !Ref PublicIP
           GroupSet:
             - !Ref WebServerSG
 
+      # インスタンスの作成時に実行するコマンドなどを記述
       UserData: !Base64 |
         #!/bin/bash
         sudo yum -y update
@@ -249,10 +270,13 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        # pingコマンドで疎通確認を行うため
+        # IPv4ですべてのプロトコルとすべてのポートを許可
         - IpProtocol: icmp
           FromPort : -1
           ToPort : -1
           CidrIp: 0.0.0.0/0
+        # IPv6ですべてのプロトコルとすべてのポートを許可
         - IpProtocol: icmp
           FromPort : -1
           ToPort : -1
