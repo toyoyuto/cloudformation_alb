@@ -1,0 +1,381 @@
+AWSTemplateFormatVersion: 
+  "2010-09-09"
+Description:
+  ELB construction
+  
+Metadata:
+  # コンソールでパラメータをグループ化およびソートする方法を定義するメタデータキー
+  "AWS::CloudFormation::Interface":
+    # パラメーターグループとそのグループに含めるパラメーターの定義
+    ParameterGroups: 
+      # Project名に関するグループ
+      - Label: 
+          default: "Project Name Prefix"
+        Parameters: 
+          - PJPrefix
+      # ネットワーク設定に関するグループ
+      - Label: 
+          default: "Network Configuration"
+        # 記述された順番に表示される
+        Parameters: 
+          - KeyName
+          
+    # パラメーターのラベル
+    ParameterLabels: 
+      KeyName: 
+        default: "Key Name"
+
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  PJPrefix:
+    Type: String
+
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+  
+Resources: 
+# ------------------------------------------------------------#
+#  VPC
+# ------------------------------------------------------------#
+# VPC Create
+  VPC: 
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      # VPC に対して DNS 解決がサポートされているか
+      EnableDnsSupport: "true"
+      # VPC 内に起動されるインスタンスが DNS ホスト名を取得するか
+      EnableDnsHostnames: "true"
+      # VPC 内に起動されるインスタンスの許可されているテナンシー
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-vpc"
+
+# InternetGateway Create
+  InternetGateway: 
+    Type: "AWS::EC2::InternetGateway"
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-igw"
+
+# IGW Attach
+  InternetGatewayAttachment: 
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties: 
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC 
+
+# ------------------------------------------------------------#
+#  Subnet
+# ------------------------------------------------------------#          
+# Public1 Subnet Create
+  Public1Subnet: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: "ap-northeast-1a"
+      CidrBlock: "10.0.0.0/24"
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-public1-subnet"
+                    
+# Public2 Subnet Create
+  Public2Subnet: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: "ap-northeast-1c"
+      CidrBlock: "10.0.1.0/24"
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-public2-subnet"
+                    
+# ------------------------------------------------------------#
+#  RouteTable
+# ------------------------------------------------------------#          
+# Public1 RouteTable Create
+  Public1RouteTable: 
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-public1-route"
+
+# Public2 RouteTable Create
+  Public2RouteTable: 
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-public2-route"
+
+
+# ------------------------------------------------------------#
+# Routing
+# ------------------------------------------------------------# 
+# Public1 Route Create
+  Public1Route: 
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref Public1RouteTable 
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway 
+# Public2 Route Create
+  Public2Route: 
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref Public2RouteTable 
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+# ------------------------------------------------------------#
+# RouteTable Associate
+# ------------------------------------------------------------# 
+# Public1RouteTable Associate PublicSubnet
+  Public1SubnetRouteTableAssociation: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref Public1Subnet
+      RouteTableId: !Ref Public1RouteTable
+# Public2RouteTable Associate PrivateSubnet
+  Public2SubnetRouteTableAssociation: 
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties: 
+        SubnetId: !Ref Public2Subnet
+        RouteTableId: !Ref Public2RouteTable
+
+# ------------------------------------------------------------#
+# EC2
+# ------------------------------------------------------------# 
+  # Web1Serverインスタンス
+  Web1Server: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-00f045aed21a55240
+      KeyName: !Ref KeyName
+      InstanceType: t2.micro
+      NetworkInterfaces: 
+        # IPv4 アドレスを割り当てるか
+        - AssociatePublicIpAddress: "true"
+          # ------------------------------------------------------
+          # アタッチの順序におけるネットワークインターフェイスの位置。
+          # ネットワークインターフェイスを指定する場合必須
+          # ------------------------------------------------------
+          DeviceIndex: "0"
+          SubnetId: !Ref Public1Subnet
+          GroupSet:
+            - !Ref Web1ServerSG
+
+      # インスタンスの作成時に実行するコマンドなどを記述
+      UserData: !Base64 |
+        #!/bin/bash
+        yum update -y
+        amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+        yum install -y httpd mariadb-server
+        systemctl start httpd
+        systemctl enable httpd
+        usermod -a -G apache ec2-user
+        chown -R ec2-user:apache /var/www
+        chmod 2775 /var/www
+        find /var/www -type d -exec chmod 2775 {} \;
+        find /var/www -type f -exec chmod 0664 {} \;
+        echo `hostname` > /var/www/html/index.html
+
+      Tags:
+          - Key: Name
+            Value: !Sub "${PJPrefix}-web1-server"
+
+  # Web1Serverセキュリティグループ
+  Web1ServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: web1-sg-cf
+      GroupDescription: web1 server sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${PJPrefix}-web1-server-sg"
+
+  # Web2Serverインスタンス
+  Web2Server: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-00f045aed21a55240
+      KeyName: !Ref KeyName
+      InstanceType: t2.micro
+      NetworkInterfaces: 
+        # IPv4 アドレスを割り当てるか
+        - AssociatePublicIpAddress: "true"
+          # ------------------------------------------------------
+          # アタッチの順序におけるネットワークインターフェイスの位置。
+          # ネットワークインターフェイスを指定する場合必須
+          # ------------------------------------------------------
+          DeviceIndex: "0"
+          SubnetId: !Ref Public2Subnet
+          GroupSet:
+            - !Ref Web2ServerSG
+
+      # インスタンスの作成時に実行するコマンドなどを記述
+      UserData: !Base64 |
+        #!/bin/bash
+        yum update -y
+        amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+        yum install -y httpd mariadb-server
+        systemctl start httpd
+        systemctl enable httpd
+        usermod -a -G apache ec2-user
+        chown -R ec2-user:apache /var/www
+        chmod 2775 /var/www
+        find /var/www -type d -exec chmod 2775 {} \;
+        find /var/www -type f -exec chmod 0664 {} \;
+        echo `hostname` > /var/www/html/index.html
+
+      Tags:
+          - Key: Name
+            Value: !Sub "${PJPrefix}-web2-server"
+
+  # Web2Serverセキュリティグループ
+  Web2ServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: web2-sg-cf
+      GroupDescription: web2 server sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${PJPrefix}-web2-server-sg"
+
+# ------------------------------------------------------------#
+#  Target Group
+# ------------------------------------------------------------#
+  TargetGroup: 
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties: 
+      VpcId: !Ref VPC
+      Name: !Sub "${PJPrefix}-tg"
+      Protocol: HTTP
+      Port: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/"
+      HealthCheckPort: "traffic-port"
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 10
+      Matcher: 
+        HttpCode: 200
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-tg"
+      TargetGroupAttributes: 
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: 300
+        - Key: "stickiness.enabled"
+          Value: false
+        - Key: "stickiness.type"
+          Value: lb_cookie
+        - Key: "stickiness.lb_cookie.duration_seconds"
+          Value: 86400
+      Targets: 
+        - Id: !Ref Web1Server
+          Port: 80
+        - Id: !Ref Web2Server
+          Port: 80
+# ------------------------------------------------------------#
+#  Internet ALB
+# ------------------------------------------------------------#
+  InternetALB: 
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties: 
+      Name: !Sub "${PJPrefix}-alb"
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-alb"
+      Scheme: "internet-facing"
+      LoadBalancerAttributes: 
+        - Key: "deletion_protection.enabled"
+          Value: false
+        - Key: "idle_timeout.timeout_seconds"
+          Value: 60
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - !Ref Public1Subnet
+        - !Ref Public2Subnet
+
+  ALBListener: 
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties: 
+      DefaultActions: 
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref InternetALB
+      Port: 80
+      Protocol: HTTP
+
+# ------------------------------------------------------------#
+#  SecurityGroup for ELB
+# ------------------------------------------------------------#
+  ALBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupName: !Sub "${PJPrefix}-alb-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-alb-sg"
+    # Rule
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------#                
+Outputs:
+# VPC
+  VPC:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${PJPrefix}-vpc"
+
+# Subnet
+  Public1Subnet:
+    Value: !Ref Public1Subnet
+    Export:
+      Name: !Sub "${PJPrefix}-public1-subnet"
+
+  Public2Subnet:
+    Value: !Ref Public2Subnet
+    Export:
+      Name: !Sub "${PJPrefix}-public2-subnet"
+    
+# EC2
+  Web1Server:
+    Value: !Ref Web1Server
+    Export:
+      Name: !Sub "${PJPrefix}-web1-server"
+  Web2Server:
+    Value: !Ref Web2Server
+    Export:
+      Name: !Sub "${PJPrefix}-web2-server"
