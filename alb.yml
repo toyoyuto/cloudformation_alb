@@ -263,7 +263,7 @@ Resources:
           Value: !Sub "${PJPrefix}-web2-server-sg"
 
 # ------------------------------------------------------------#
-#  Target Group（指定したポートとプロトコルを使用して登録済みターゲットにリクエストを送信)
+#  Target Group
 # ------------------------------------------------------------#
   TargetGroup: 
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -274,9 +274,8 @@ Resources:
       Protocol: HTTP
       Port: 80
       # ターゲットでヘルスチェックを実行するときにロードバランサーが使用するプロトコル
-      # ヘルスチェックは登録されたターゲットに定期的にリクエストを送信し、ステータスをテストするもの
       HealthCheckProtocol: HTTP
-      # ヘルスチェックのターゲットの送信先である ping パス
+      # ヘルスチェックのターゲットの送信先である
       HealthCheckPath: "/"
       # ターゲットでヘルスチェックを実行するときにロードバランサーが使用するポート
       HealthCheckPort: "traffic-port"
@@ -296,12 +295,10 @@ Resources:
           Value: !Sub "${PJPrefix}-tg"
       # ターゲットグループの属性
       TargetGroupAttributes:
-        # 登録解除するターゲットの状態が draining から unused に変わるのを
-        # Elastic Load Balancing が待機する時間
+        # 登録解除するターゲットの状態が draining から unused に変わるのをELBが待機する時間
         - Key: "deregistration_delay.timeout_seconds"
           Value: 300
-        # スティッキーセッションが有効か
-        # https://blog.serverworks.co.jp/tech/2017/01/05/elb-sticky/#%E6%A6%82%E8%A6%81
+        # スティッキーセッションが有効か¥
         - Key: "stickiness.enabled"
           Value: false
         # スティッキーセッションのタイプ
@@ -310,14 +307,14 @@ Resources:
         # クライアントからのリクエストを同じターゲットにルーティングする必要がある期間
         - Key: "stickiness.lb_cookie.duration_seconds"
           Value: 86400
-      # EC2などの分散先
       Targets: 
         - Id: !Ref Web1Server
           Port: 80
         - Id: !Ref Web2Server
           Port: 80
+
 # ------------------------------------------------------------#
-#  Internet ALB
+#  ALB
 # ------------------------------------------------------------#
   InternetALB: 
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
@@ -343,21 +340,20 @@ Resources:
         - !Ref Public2Subnet
 
   ALBListener: 
-    # リスナーはロードバランサーが登録済みターゲットにリクエストをルーティングする方法
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties: 
       # デフォルトルールのアクション
       DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
           # ルールアクションタイプ
-          # forwardhは指定されたターゲットグループにリクエストを転送します
+          # forwardは指定されたターゲットグループにリクエストを
           Type: forward
       LoadBalancerArn: !Ref InternetALB
       Port: 80
       Protocol: HTTP
 
 # ------------------------------------------------------------#
-#  SecurityGroup for ELB
+#  SecurityGroup for ALB
 # ------------------------------------------------------------#
   ALBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -405,3 +401,8 @@ Outputs:
     Value: !Ref Web2Server
     Export:
       Name: !Sub "${PJPrefix}-web2-server"
+# ALB
+  InternetALB:
+    Value: !Ref InternetALB
+    Export:
+      Name: !Sub "${PJPrefix}-alb"
