@@ -202,7 +202,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${PJPrefix}-web1-server-sg"
-
+          
+  # Web1ServerSGのインプットルール
   Web1ServerSGIngress: 
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties: 
@@ -211,6 +212,7 @@ Resources:
       ToPort: 80
       SourceSecurityGroupId: !GetAtt [ ALBSecurityGroup, GroupId ] 
       GroupId: !GetAtt [ Web1ServerSG, GroupId ]
+
   # Web2Serverインスタンス
   Web2Server: 
     Type: AWS::EC2::Instance
@@ -260,6 +262,7 @@ Resources:
         - Key: Name
           Value: !Sub "${PJPrefix}-web2-server-sg"
 
+  # Web2ServerSGのインプットルール
   Web2ServerSGIngress: 
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties: 
@@ -359,9 +362,7 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-# ------------------------------------------------------------#
-#  SecurityGroup for ALB
-# ------------------------------------------------------------#
+  # InternetALBのセキュリティグループ
   ALBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -371,7 +372,8 @@ Resources:
       Tags:
         - Key: "Name"
           Value: !Sub "${PJPrefix}-alb-sg"
-  # Rule
+
+  # ALBSecurityGroupのインプットルール
   ALBSecurityGroupIngress: 
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties: 
@@ -380,22 +382,24 @@ Resources:
       ToPort: 80
       CidrIp: "0.0.0.0/0"
       GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
-  # ALBSecurityGroupEgress1: 
-  #   Type: "AWS::EC2::SecurityGroupEgress"
-  #   Properties: 
-  #     IpProtocol: tcp
-  #     FromPort: 80
-  #     ToPort: 80
-  #     SourceSecurityGroupId: !GetAtt [ Web1ServerSG, GroupId ] 
-  #     GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
-  # ALBSecurityGroupEgress2: 
-  #   Type: "AWS::EC2::SecurityGroupEgress"
-  #   Properties: 
-  #     IpProtocol: tcp
-  #     FromPort: 80
-  #     ToPort: 80
-  #     SourceSecurityGroupId: !GetAtt [ Web2ServerSG, GroupId ] 
-  #     GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
+    
+  # ALBSecurityGroupのアウトプットルール
+  ALBSecurityGroupEgress1: 
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt [ Web1ServerSG, GroupId ] 
+      GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
+  ALBSecurityGroupEgress2: 
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt [ Web2ServerSG, GroupId ] 
+      GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
 
 # ------------------------------------------------------------#
 # Output Parameters
