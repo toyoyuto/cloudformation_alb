@@ -199,15 +199,18 @@ Resources:
       GroupName: web1-sg-cf
       GroupDescription: web1 server sg
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub "${PJPrefix}-web1-server-sg"
 
+  Web1ServerSGIngress: 
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt [ ALBSecurityGroup, GroupId ] 
+      GroupId: !GetAtt [ Web1ServerSG, GroupId ]
   # Web2Serverインスタンス
   Web2Server: 
     Type: AWS::EC2::Instance
@@ -253,14 +256,18 @@ Resources:
       GroupName: web2-sg-cf
       GroupDescription: web2 server sg
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub "${PJPrefix}-web2-server-sg"
+
+  Web2ServerSGIngress: 
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt [ ALBSecurityGroup, GroupId ] 
+      GroupId: !GetAtt [ Web2ServerSG, GroupId ]
 
 # ------------------------------------------------------------#
 #  Target Group
@@ -346,7 +353,7 @@ Resources:
       DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
           # ルールアクションタイプ
-          # forwardは指定されたターゲットグループにリクエストを
+          # forwardは指定されたターゲットグループにリクエストを転送
           Type: forward
       LoadBalancerArn: !Ref InternetALB
       Port: 80
@@ -364,12 +371,31 @@ Resources:
       Tags:
         - Key: "Name"
           Value: !Sub "${PJPrefix}-alb-sg"
-    # Rule
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: "0.0.0.0/0"
+  # Rule
+  ALBSecurityGroupIngress: 
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: "0.0.0.0/0"
+      GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
+  # ALBSecurityGroupEgress1: 
+  #   Type: "AWS::EC2::SecurityGroupEgress"
+  #   Properties: 
+  #     IpProtocol: tcp
+  #     FromPort: 80
+  #     ToPort: 80
+  #     SourceSecurityGroupId: !GetAtt [ Web1ServerSG, GroupId ] 
+  #     GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
+  # ALBSecurityGroupEgress2: 
+  #   Type: "AWS::EC2::SecurityGroupEgress"
+  #   Properties: 
+  #     IpProtocol: tcp
+  #     FromPort: 80
+  #     ToPort: 80
+  #     SourceSecurityGroupId: !GetAtt [ Web2ServerSG, GroupId ] 
+  #     GroupId: !GetAtt [ ALBSecurityGroup, GroupId ]
 
 # ------------------------------------------------------------#
 # Output Parameters
